@@ -47,7 +47,6 @@ from ray.serve._private.common import (
 )
 
 
-
 class IGWRouter(RequestRouter):
     def __init__(
         self,
@@ -176,9 +175,6 @@ class IGWRouter(RequestRouter):
         # Not currently used, but could be hooked into for the PreRequest hook.
         # But intentionally keeping the py-scheduler framework isolated from Ray Serve
         print("on_request_routed callback is called")
-
-
-# defining an IGW-like scheduler
 
 
 def build_custom_openai_app(builder_config: dict):
