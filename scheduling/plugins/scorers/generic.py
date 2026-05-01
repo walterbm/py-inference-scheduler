@@ -13,9 +13,17 @@
 # limitations under the License.
 
 from __future__ import annotations
-from typing import Any, Dict, Sequence, Mapping
+
 import threading
-from ...framework import ScorerPlugin, Endpoint, LLMRequest, register_scorer
+from typing import Mapping, Sequence
+
+from scheduling.framework import (
+    CycleState,
+    Endpoint,
+    LLMRequest,
+    ScorerPlugin,
+    register_scorer,
+)
 
 
 @register_scorer("constant")
@@ -26,10 +34,10 @@ class ConstantScorer(ScorerPlugin):
         self.value = value
 
     def score(
-        self, cycle_state: Any, request: LLMRequest, endpoints: Sequence[Endpoint]
-    ) -> Dict[str, float]:
+        self, cycle_state: CycleState, request: LLMRequest, endpoints: Sequence[Endpoint]
+    ) -> dict[str, float]:
         if isinstance(endpoints, Mapping):
-            return {name: float(self.value) for name in endpoints.keys()}
+            return {name: float(self.value) for name in endpoints}
         return {p.name: float(self.value) for p in endpoints}
 
 
@@ -42,8 +50,8 @@ class RoundRobinScorer(ScorerPlugin):
         self._lock = threading.Lock()
 
     def score(
-        self, cycle_state: Any, request: LLMRequest, pods: Mapping[str, Endpoint]
-    ) -> Dict[str, float]:
+        self, cycle_state: CycleState, request: LLMRequest, pods: Mapping[str, Endpoint]
+    ) -> dict[str, float]:
         if not pods:
             return {}
 

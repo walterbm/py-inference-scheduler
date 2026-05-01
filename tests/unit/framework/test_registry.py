@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import pytest
+
 from scheduling.core.config import SchedulerConfig
-from scheduling.framework import _SCORERS, _PICKERS, _PROFILE_HANDLERS
-from scheduling.plugins import WaitingQueueScorer, MaxScorePicker, SingleProfileHandler
+from scheduling.framework import _PICKERS, _PROFILE_HANDLERS, _SCORERS
+from scheduling.plugins import MaxScorePicker, SingleProfileHandler, WaitingQueueScorer
 
 
 def test_registry_populated():

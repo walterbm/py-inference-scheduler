@@ -13,19 +13,23 @@
 # limitations under the License.
 
 from __future__ import annotations
-from typing import Any, Dict, Sequence, Mapping
-from ...framework import (
-    ScorerPlugin,
+
+from typing import Mapping, Sequence
+
+from scheduling.framework import (
+    CycleState,
     Endpoint,
     LLMRequest,
-    score_by_metric,
+    ScorerPlugin,
     register_scorer,
+    score_by_metric,
 )
 
 
 @register_scorer("queue_length")
 class QueueLengthScorer(ScorerPlugin):
     """Scores endpoints based on a 'waiting_queue_size' attribute.
+
     Lower queue size is better.
     """
 
@@ -33,15 +37,15 @@ class QueueLengthScorer(ScorerPlugin):
         self.attribute_key = attribute_key
 
     def score(
-        self, cycle_state: Any, request: LLMRequest, endpoints: Sequence[Endpoint]
-    ) -> Dict[str, float]:
+        self, cycle_state: CycleState, request: LLMRequest, endpoints: Sequence[Endpoint]
+    ) -> dict[str, float]:
         if isinstance(endpoints, Mapping):
-            result: Dict[str, float] = {}
+            result: dict[str, float] = {}
             for name, ep in endpoints.items():
                 raw = ep.attributes.get(self.attribute_key, 0)
                 try:
                     size = int(raw)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     size = 0
                 result[name] = float(-size)
             return result
@@ -57,8 +61,8 @@ class LeastQueueScorer(ScorerPlugin):
     """Scores endpoints based on their real-time Ray Serve actor queue length."""
 
     def score(
-        self, cycle_state: Any, request: LLMRequest, endpoints: Sequence[Endpoint]
-    ) -> Dict[str, float]:
+        self, cycle_state: CycleState, request: LLMRequest, endpoints: Sequence[Endpoint]
+    ) -> dict[str, float]:
         return score_by_metric(
             endpoints,
             metric_extractor=lambda ep: float(ep.attributes.get("queue_len", 0)),
@@ -71,8 +75,8 @@ class WaitingQueueScorer(ScorerPlugin):
     """Scores candidate endpoints based on the number of waiting requests inside the vLLM engine."""
 
     def score(
-        self, cycle_state: Any, request: LLMRequest, endpoints: Sequence[Endpoint]
-    ) -> Dict[str, float]:
+        self, cycle_state: CycleState, request: LLMRequest, endpoints: Sequence[Endpoint]
+    ) -> dict[str, float]:
         return score_by_metric(
             endpoints,
             metric_extractor=lambda ep: float(
@@ -87,8 +91,8 @@ class RunningQueueScorer(ScorerPlugin):
     """Scores candidate endpoints based on the number of running requests inside the vLLM engine."""
 
     def score(
-        self, cycle_state: Any, request: LLMRequest, endpoints: Sequence[Endpoint]
-    ) -> Dict[str, float]:
+        self, cycle_state: CycleState, request: LLMRequest, endpoints: Sequence[Endpoint]
+    ) -> dict[str, float]:
         return score_by_metric(
             endpoints,
             metric_extractor=lambda ep: float(
@@ -103,8 +107,8 @@ class KVCacheScorer(ScorerPlugin):
     """Scores candidate endpoints based on KV cache utilization."""
 
     def score(
-        self, cycle_state: Any, request: LLMRequest, endpoints: Sequence[Endpoint]
-    ) -> Dict[str, float]:
+        self, cycle_state: CycleState, request: LLMRequest, endpoints: Sequence[Endpoint]
+    ) -> dict[str, float]:
         return score_by_metric(
             endpoints,
             metric_extractor=lambda ep: float(

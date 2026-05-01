@@ -13,12 +13,10 @@
 # limitations under the License.
 
 
-from scheduling.framework import Endpoint, LLMRequest
-from scheduling.framework import SchedulerProfile, WeightedScorer
-from scheduling.plugins import QueueLengthScorer, RandomPicker
-from scheduling.plugins import SingleProfileHandler
 from scheduling.core.config import SchedulerConfig
 from scheduling.core.scheduler import Scheduler
+from scheduling.framework import Endpoint, LLMRequest, SchedulerProfile, WeightedScorer
+from scheduling.plugins import QueueLengthScorer, RandomPicker, SingleProfileHandler
 
 
 def make_scheduler_with_profile(profile: SchedulerProfile) -> Scheduler:

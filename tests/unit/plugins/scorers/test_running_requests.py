@@ -13,7 +13,8 @@
 # limitations under the License.
 
 import pytest
-from scheduling.framework import Endpoint, LLMRequest, CycleState
+
+from scheduling.framework import CycleState, Endpoint, LLMRequest
 from scheduling.plugins import RunningQueueScorer
 
 

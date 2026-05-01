@@ -14,16 +14,16 @@
 
 
 import pytest
-from scheduling import SchedulerConfig, Scheduler
+
+from scheduling import Scheduler, SchedulerConfig
+from scheduling.framework import Endpoint, LLMRequest, SchedulerProfile, WeightedScorer
 from scheduling.plugins import (
-    SingleProfileHandler,
-    SimpleFilter,
     ConstantScorer,
-    QueueLengthScorer,
     MaxScorePicker,
+    QueueLengthScorer,
+    SimpleFilter,
+    SingleProfileHandler,
 )
-from scheduling.framework import SchedulerProfile, WeightedScorer
-from scheduling.framework import Endpoint, LLMRequest
 
 
 class RandomPicker:
@@ -44,7 +44,7 @@ def test_no_candidate_pods_raises():
     profile = SchedulerProfile(name="default")
     s = make_scheduler_with_profile(profile)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="no scheduling candidates provided"):
         s.schedule(LLMRequest(request_id="1", target_model="m"), [])
 
 
@@ -58,7 +58,7 @@ def test_finds_highest_score_pod():
         def score(self, cycle_state, request, pods):
             # `pods` is a mapping name->Endpoint
             if hasattr(pods, "items"):
-                return {name: (2.0 if name == "pod2" else 1.0) for name in pods.keys()}
+                return {name: (2.0 if name == "pod2" else 1.0) for name in pods}
             # fallback for sequences
             return {p.name: (2.0 if p.name == "pod2" else 1.0) for p in pods}
 
@@ -109,7 +109,7 @@ def test_filter_scorer_picker_combined():
         SchedulerProfile(name="default")
         .with_filters(f)
         .with_scorers(WeightedScorer(qls, 1.0))
-        .with_picker((MaxScorePicker()))
+        .with_picker(MaxScorePicker())
     )
     s = make_scheduler_with_profile(profile)
 

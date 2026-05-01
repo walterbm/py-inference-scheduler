@@ -13,15 +13,17 @@
 # limitations under the License.
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, Sequence, Mapping
-from ...framework import (
-    FilterPlugin,
-    ProfileHandler,
-    SchedulerProfile,
-    Endpoint,
+
+from typing import Mapping, Sequence
+
+from scheduling.framework import (
     CycleState,
+    Endpoint,
+    FilterPlugin,
     LLMRequest,
+    ProfileHandler,
     ProfileRunResult,
+    SchedulerProfile,
     register_filter,
     register_profile_handler,
 )
@@ -31,7 +33,7 @@ from ...framework import (
 class SimpleFilter(FilterPlugin):
     """A filter that keeps endpoints whose attribute `key` equals `value` (if provided)."""
 
-    def __init__(self, key: str, value: Optional[Any] = None) -> None:
+    def __init__(self, key: str, value: object | None = None) -> None:
         self.key = key
         self.value = value
 
@@ -42,14 +44,14 @@ class SimpleFilter(FilterPlugin):
         endpoints: Sequence[Endpoint],
     ) -> Mapping[str, Endpoint]:
         if isinstance(endpoints, Mapping):
-            result: Dict[str, Endpoint] = {}
+            result: dict[str, Endpoint] = {}
             for name, p in endpoints.items():
                 v = p.attributes.get(self.key)
                 if self.value is None or v == self.value:
                     result[name] = p
             return result
 
-        out: List[Endpoint] = []
+        out: list[Endpoint] = []
         for p in endpoints:
             v = p.attributes.get(self.key)
             if self.value is None or v == self.value:
@@ -65,17 +67,17 @@ class SingleProfileHandler(ProfileHandler):
         self,
         cycle_state: CycleState,
         request: LLMRequest,
-        profiles: Dict[str, SchedulerProfile],
-        profile_results: Dict[str, Optional[ProfileRunResult]],
-    ) -> Dict[str, SchedulerProfile]:
+        profiles: dict[str, SchedulerProfile],
+        profile_results: dict[str, ProfileRunResult | None],
+    ) -> dict[str, SchedulerProfile]:
         return profiles.copy()
 
     def process_results(
         self,
         cycle_state: CycleState,
         request: LLMRequest,
-        profile_results: Dict[str, Optional[ProfileRunResult]],
-    ) -> Optional[str]:
+        profile_results: dict[str, ProfileRunResult | None],
+    ) -> str | None:
         for name, res in profile_results.items():
             if res is not None and res.endpoint_list:
                 return name
