@@ -25,7 +25,9 @@ from verl.experimental.agent_loop.agent_loop import (  # type: ignore[import-not
     AgentLoopWorker,
     AsyncLLMServerManager,
 )
-from verl.workers.rollout.vllm_rollout.vllm_async_server import vLLMHttpServer  # type: ignore[import-not-found]
+from verl.workers.rollout.vllm_rollout.vllm_async_server import (  # type: ignore[import-not-found]
+    vLLMHttpServer,  # type: ignore[import-not-found]
+)
 
 from datalayer.verl.datastore import InflightStore
 from datalayer.verl.metrics import verl_metrics_polling_loop
