@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import concurrent.futures
+
+from scheduling.framework import CycleState, Endpoint, LLMRequest
 from scheduling.plugins import RoundRobinScorer
-from scheduling.framework import Endpoint, CycleState, LLMRequest
 
 
 def test_round_robin_cycling():
@@ -74,7 +75,7 @@ def test_round_robin_concurrency():
     selection_counts = {}
     for res in results:
         assert len(res) == 1
-        name = list(res.keys())[0]
+        name = next(iter(res))
         selection_counts[name] = selection_counts.get(name, 0) + 1
 
     for i in range(10):

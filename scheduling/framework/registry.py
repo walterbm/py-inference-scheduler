@@ -12,42 +12,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Type, Dict, Any, TypeVar
-from .interface import ScorerPlugin, PickerPlugin, FilterPlugin, ProfileHandler
+from __future__ import annotations
+
+from typing import Callable, TypeVar
+
+from .interface import FilterPlugin, PickerPlugin, ProfileHandler, ScorerPlugin
 
 T = TypeVar("T")
 
 # Internal registry dictionaries mapping string names to Plugin classes
-_SCORERS: Dict[str, Type[ScorerPlugin]] = {}
-_PICKERS: Dict[str, Type[PickerPlugin]] = {}
-_FILTERS: Dict[str, Type[FilterPlugin]] = {}
-_PROFILE_HANDLERS: Dict[str, Type[ProfileHandler]] = {}
+_SCORERS: dict[str, type[ScorerPlugin]] = {}
+_PICKERS: dict[str, type[PickerPlugin]] = {}
+_FILTERS: dict[str, type[FilterPlugin]] = {}
+_PROFILE_HANDLERS: dict[str, type[ProfileHandler]] = {}
 
 
-def register_scorer(name: str) -> Callable[[Type[ScorerPlugin]], Type[ScorerPlugin]]:
+def register_scorer(name: str) -> Callable[[type[ScorerPlugin]], type[ScorerPlugin]]:
     """Decorator to register a custom Scorer class under a specific string name."""
 
-    def wrapper(cls: Type[ScorerPlugin]) -> Type[ScorerPlugin]:
+    def wrapper(cls: type[ScorerPlugin]) -> type[ScorerPlugin]:
         _SCORERS[name] = cls
         return cls
 
     return wrapper
 
 
-def register_picker(name: str) -> Callable[[Type[PickerPlugin]], Type[PickerPlugin]]:
+def register_picker(name: str) -> Callable[[type[PickerPlugin]], type[PickerPlugin]]:
     """Decorator to register a custom Picker class under a specific string name."""
 
-    def wrapper(cls: Type[PickerPlugin]) -> Type[PickerPlugin]:
+    def wrapper(cls: type[PickerPlugin]) -> type[PickerPlugin]:
         _PICKERS[name] = cls
         return cls
 
     return wrapper
 
 
-def register_filter(name: str) -> Callable[[Type[FilterPlugin]], Type[FilterPlugin]]:
+def register_filter(name: str) -> Callable[[type[FilterPlugin]], type[FilterPlugin]]:
     """Decorator to register a custom Filter class under a specific string name."""
 
-    def wrapper(cls: Type[FilterPlugin]) -> Type[FilterPlugin]:
+    def wrapper(cls: type[FilterPlugin]) -> type[FilterPlugin]:
         _FILTERS[name] = cls
         return cls
 
@@ -56,17 +59,17 @@ def register_filter(name: str) -> Callable[[Type[FilterPlugin]], Type[FilterPlug
 
 def register_profile_handler(
     name: str,
-) -> Callable[[Type[ProfileHandler]], Type[ProfileHandler]]:
+) -> Callable[[type[ProfileHandler]], type[ProfileHandler]]:
     """Decorator to register a custom ProfileHandler class under a specific string name."""
 
-    def wrapper(cls: Type[ProfileHandler]) -> Type[ProfileHandler]:
+    def wrapper(cls: type[ProfileHandler]) -> type[ProfileHandler]:
         _PROFILE_HANDLERS[name] = cls
         return cls
 
     return wrapper
 
 
-def build_plugin(registry: Dict[str, Type[T]], type_name: str, **kwargs: Any) -> T:
+def build_plugin(registry: dict[str, type[T]], type_name: str, **kwargs: object) -> T:
     """Helper method to instantiate a class from a specific registry category by its string name."""
     cls = registry.get(type_name)
     if cls is None:
@@ -78,21 +81,21 @@ def build_plugin(registry: Dict[str, Type[T]], type_name: str, **kwargs: Any) ->
     return cls(**kwargs)
 
 
-def build_scorer(type_name: str, **kwargs: Any) -> ScorerPlugin:
+def build_scorer(type_name: str, **kwargs: object) -> ScorerPlugin:
     """Instantiate a registered Scorer class based on its string identifier and config."""
     return build_plugin(_SCORERS, type_name, **kwargs)
 
 
-def build_picker(type_name: str, **kwargs: Any) -> PickerPlugin:
+def build_picker(type_name: str, **kwargs: object) -> PickerPlugin:
     """Instantiate a registered Picker class based on its string identifier and config."""
     return build_plugin(_PICKERS, type_name, **kwargs)
 
 
-def build_filter(type_name: str, **kwargs: Any) -> FilterPlugin:
+def build_filter(type_name: str, **kwargs: object) -> FilterPlugin:
     """Instantiate a registered Filter class based on its string identifier and config."""
     return build_plugin(_FILTERS, type_name, **kwargs)
 
 
-def build_profile_handler(type_name: str, **kwargs: Any) -> ProfileHandler:
+def build_profile_handler(type_name: str, **kwargs: object) -> ProfileHandler:
     """Instantiate a registered ProfileHandler class based on its string identifier and config."""
     return build_plugin(_PROFILE_HANDLERS, type_name, **kwargs)

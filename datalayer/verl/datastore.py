@@ -13,17 +13,18 @@
 # limitations under the License.
 
 
-import threading
+from __future__ import annotations
+
 import logging
-from typing import Dict
+import threading
 
 logger = logging.getLogger(__name__)
 
 
 class InflightStore:
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._inflight: Dict[str, int] = {}
+        self._inflight: dict[str, int] = {}
 
     def increment(self, endpoint_name: str) -> None:
         """Called proactively in `_choose_server` the instant a route is decided (PreRequest)."""
@@ -31,13 +32,14 @@ class InflightStore:
             self._inflight[endpoint_name] = self._inflight.get(endpoint_name, 0) + 1
 
     def decrement(self, endpoint_name: str) -> None:
-        """Called in `generate` the instant the physical GPU completes the request (ResponseComplete)."""
+        """Called when the physical GPU completes the request (ResponseComplete)."""
         with self._lock:
             if self._inflight.get(endpoint_name, 0) > 0:
                 self._inflight[endpoint_name] -= 1
             else:
                 logger.warning(
-                    f"Attempted to decrement inflight store for {endpoint_name} but it is already 0."
+                    "Attempted to decrement inflight store for %s but it is already 0.",
+                    endpoint_name,
                 )
 
     def get(self, endpoint_name: str) -> int:
@@ -45,7 +47,7 @@ class InflightStore:
         with self._lock:
             return self._inflight.get(endpoint_name, 0)
 
-    def get_all(self) -> Dict[str, int]:
+    def get_all(self) -> dict[str, int]:
         """Provides a snapshot of the entire active cluster load."""
         with self._lock:
             return self._inflight.copy()

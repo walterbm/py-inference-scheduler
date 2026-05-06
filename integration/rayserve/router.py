@@ -13,55 +13,55 @@
 # limitations under the License.
 
 
-from scheduling.framework import (
-    Endpoint,
-    LLMRequest,
-)
-from scheduling.core.scheduler import Scheduler
-from typing import Optional, List, Callable
+from __future__ import annotations
+
 import asyncio
 import random
 import time
+from typing import Callable
 
 from ray import serve
-from ray.serve.llm import LLMConfig
-from datalayer.rayserve.engine import MetricsAwareLLMServer
-from ray.llm._internal.serve.core.ingress.builder import (
+from ray.actor import ActorHandle
+from ray.llm._internal.serve.core.ingress.builder import (  # noqa: PLC2701
     LLMServingArgs,
     make_fastapi_ingress,
 )
-from ray.llm._internal.serve.core.server.builder import build_llm_deployment
-
-from ray.serve.request_router import (
-    PendingRequest,
-    RequestRouter,
-    ReplicaResult,
-    RunningReplica,
-)
-from ray.actor import ActorHandle
+from ray.llm._internal.serve.core.server.builder import build_llm_deployment  # noqa: PLC2701
 from ray.serve._private.common import (
     DeploymentHandleSource,
     DeploymentID,
     ReplicaID,
     RunningReplicaInfo,
 )
+from ray.serve.llm import LLMConfig
+from ray.serve.request_router import (
+    PendingRequest,
+    ReplicaResult,
+    RequestRouter,
+    RunningReplica,
+)
+
+from datalayer.rayserve.engine import MetricsAwareLLMServer
+from scheduling.core.scheduler import Scheduler
+from scheduling.framework import (
+    Endpoint,
+    LLMRequest,
+)
 
 
 class IGWRouter(RequestRouter):
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         deployment_id: DeploymentID,
         handle_source: DeploymentHandleSource,
-        self_actor_id: Optional[str] = None,
-        self_actor_handle: Optional[ActorHandle] = None,
+        *,
+        self_actor_id: str | None = None,
+        self_actor_handle: ActorHandle | None = None,
         use_replica_queue_len_cache: bool = False,
-        get_curr_time_s: Optional[Callable[[], float]] = None,
-        create_replica_wrapper_func: Optional[
-            Callable[[RunningReplicaInfo], RunningReplica]
-        ] = None,
-        *args,
-        **kwargs,
-    ):
+        get_curr_time_s: Callable[[], float] | None = None,
+        create_replica_wrapper_func: Callable[[RunningReplicaInfo], RunningReplica] | None = None,
+        **kwargs: object,
+    ) -> None:
         RequestRouter.__init__(
             self,
             deployment_id=deployment_id,
@@ -71,22 +71,21 @@ class IGWRouter(RequestRouter):
             use_replica_queue_len_cache=True,
             get_curr_time_s=get_curr_time_s,
             create_replica_wrapper_func=create_replica_wrapper_func,
-            *args,
             **kwargs,
         )
         # Initialize the RayRequestScheduler
         self.scheduler = Scheduler()
 
-    async def choose_replicas(
+    async def choose_replicas(  # noqa: PLR0912
         self,
-        candidate_replicas: List[RunningReplica],
-        pending_request: Optional[PendingRequest] = None,
-    ) -> List[List[RunningReplica]]:
+        candidate_replicas: list[RunningReplica],
+        pending_request: PendingRequest | None = None,
+    ) -> list[list[RunningReplica]]:
         self.scheduler._maybe_reload_config()
 
         if not pending_request or not pending_request.args:
             print("No pending request or args, defaulting to random choice")
-            index = random.randint(0, len(candidate_replicas) - 1)
+            index = random.randint(0, len(candidate_replicas) - 1)  # noqa: S311
             final = time.time()
             return [[candidate_replicas[index]]]
 
@@ -128,7 +127,7 @@ class IGWRouter(RequestRouter):
 
                 if isinstance(routing_stats, Exception):
                     print(f"Failed to fetch metrics via RPC for {rid}: {routing_stats}")
-                    routing_stats = {}
+                    routing_stats = {}  # noqa: PLW2901
 
                 candidates.append(
                     Endpoint(
@@ -155,15 +154,15 @@ class IGWRouter(RequestRouter):
                     index = i
                     break
             if index == -1:
-                index = random.randint(0, len(candidate_replicas) - 1)
+                index = random.randint(0, len(candidate_replicas) - 1)  # noqa: S311
             final = time.time()
             print(f"Scheduling took {final - initial} seconds")
             return [[candidate_replicas[index]]]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(
-                f"Error of: {repr(e)} during scheduling: {e}, defaulting to random choice"
+                f"Error of: {e!r} during scheduling: {e}, defaulting to random choice"
             )
-            index = random.randint(0, len(candidate_replicas) - 1)
+            index = random.randint(0, len(candidate_replicas) - 1)  # noqa: S311
             return [[candidate_replicas[index]]]
 
     def on_request_routed(
@@ -171,13 +170,13 @@ class IGWRouter(RequestRouter):
         pending_request: PendingRequest,
         replica_id: ReplicaID,
         result: ReplicaResult,
-    ):
+    ) -> None:
         # Not currently used, but could be hooked into for the PreRequest hook.
         # But intentionally keeping the py-scheduler framework isolated from Ray Serve
         print("on_request_routed callback is called")
 
 
-def build_custom_openai_app(builder_config: dict):
+def build_custom_openai_app(builder_config: dict[str, object]) -> object:
     # Same internal logic as build_openai_app, but we map our deployment_cls
     builder_config = LLMServingArgs.model_validate(builder_config)
     llm_configs = builder_config.llm_configs
@@ -198,25 +197,24 @@ def build_custom_openai_app(builder_config: dict):
 # Hooking into Ray Serve's Request Router
 
 llm_config = LLMConfig(
-    model_loading_config=dict(
-        model_id="qwen-32b",
-        model_source="Qwen/Qwen2.5-32B-Instruct",
-    ),
-    engine_kwargs=dict(
-        enable_prefix_caching=True,
-    ),
-    deployment_config=dict(
-        # max_ongoing_requests=10,
-        autoscaling_config=dict(
-            min_replicas=6,
-            max_replicas=6,
-        ),
-        request_router_config=dict(
+    model_loading_config={
+        "model_id": "qwen-32b",
+        "model_source": "Qwen/Qwen2.5-32B-Instruct",
+    },
+    engine_kwargs={
+        "enable_prefix_caching": True,
+    },
+    deployment_config={
+        "autoscaling_config": {
+            "min_replicas": 6,
+            "max_replicas": 6,
+        },
+        "request_router_config": {
             # Note our custom IGWRouter here
-            request_router_class=IGWRouter,
-        ),
-        ray_actor_options=dict(num_cpus=1),
-    ),
+            "request_router_class": IGWRouter,
+        },
+        "ray_actor_options": {"num_cpus": 1},
+    },
 )
 
 app = build_custom_openai_app(

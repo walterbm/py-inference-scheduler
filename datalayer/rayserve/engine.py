@@ -12,23 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ray.llm._internal.serve.engines.vllm.vllm_engine import VLLMEngine
-from ray.llm._internal.serve.core.server.llm_server import LLMServer
+from __future__ import annotations
+
+from ray.llm._internal.serve.core.server.llm_server import LLMServer  # noqa: PLC2701
+from ray.llm._internal.serve.engines.vllm.vllm_engine import VLLMEngine  # noqa: PLC2701
 from vllm.v1.metrics.loggers import StatLoggerBase
 
 
 class DirectKVCacheLogger(StatLoggerBase):
-    def __init__(self, vllm_config, engine_idx=0):
+    def __init__(self, vllm_config: object, engine_idx: int = 0) -> None:
         # The factory signature mandates these arguments.
-        self.target_dict = None
+        self.target_dict: dict[str, object] | None = None
 
-    def log(self):
+    def log(self) -> None:
         pass
 
-    def log_engine_initialized(self):
+    def log_engine_initialized(self) -> None:
         pass
 
-    def record(self, scheduler_stats, iteration_stats, engine_idx=0):
+    def record(
+        self,
+        scheduler_stats: object,
+        iteration_stats: object,
+        engine_idx: int = 0,
+    ) -> None:
         if self.target_dict is not None and scheduler_stats is not None:
             self.target_dict["kv"] = getattr(scheduler_stats, "kv_cache_usage", 0.0)
             self.target_dict["num_waiting_reqs"] = getattr(
@@ -40,11 +47,19 @@ class DirectKVCacheLogger(StatLoggerBase):
 
 
 class MetricsAwareVLLMEngine(VLLMEngine):
-    def _start_async_llm_engine(self, engine_args, engine_config, pg):
+    def _start_async_llm_engine(
+        self,
+        engine_args: object,
+        engine_config: object,
+        pg: object,
+    ) -> object:
         self.live_metrics = {"kv": 0.0, "num_waiting_reqs": 0, "num_running_reqs": 0}
 
-        # vLLM expects a StatLoggerFactory (a Callable that returns the Logger) - we create a closure that instantiates the logger and attaches our dict
-        def logger_factory(vllm_config, engine_idx=0):
+        # vLLM expects a StatLoggerFactory, so use a closure that attaches
+        # our metrics dict to each logger instance.
+        def logger_factory(
+            vllm_config: object, engine_idx: int = 0
+        ) -> DirectKVCacheLogger:
             logger = DirectKVCacheLogger(vllm_config, engine_idx)
             logger.target_dict = self.live_metrics
             return logger
@@ -64,7 +79,7 @@ class MetricsAwareVLLMEngine(VLLMEngine):
             stat_loggers=[logger_factory],
         )
 
-    def record_routing_stats(self):
+    def record_routing_stats(self) -> dict[str, object]:
         # Ray natively expects this to return a dictionary
         return {
             "kv": self.live_metrics.get("kv", 0.0),
@@ -76,5 +91,5 @@ class MetricsAwareVLLMEngine(VLLMEngine):
 class MetricsAwareLLMServer(LLMServer):
     _default_engine_cls = MetricsAwareVLLMEngine
 
-    async def record_routing_stats(self):
+    async def record_routing_stats(self) -> dict[str, object]:
         return self.engine.record_routing_stats()

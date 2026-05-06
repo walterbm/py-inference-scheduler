@@ -13,22 +13,22 @@
 # limitations under the License.
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class LLMRequest:
     request_id: str
-    target_model: Optional[str] = None
-    headers: Dict[str, str] = field(default_factory=dict)
-    body: Any = None
+    target_model: str | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+    body: object | None = None
 
 
 @dataclass
 class Endpoint:
     name: str
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    attributes: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -40,25 +40,25 @@ class ScoredEndpoint:
 @dataclass
 class ProfileRunResult:
     # list of chosen pods (may be empty)
-    endpoint_list: List[ScoredEndpoint] = field(default_factory=list)
+    endpoint_list: list[ScoredEndpoint] = field(default_factory=list)
     # arbitrary result metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
 class SchedulingResult:
-    profile_results: Dict[str, ProfileRunResult] = field(default_factory=dict)
-    primary_profile_name: Optional[str] = None
+    profile_results: dict[str, ProfileRunResult] = field(default_factory=dict)
+    primary_profile_name: str | None = None
 
 
 class CycleState:
     """Per-request ephemeral state that plugins may use."""
 
     def __init__(self) -> None:
-        self._state: Dict[str, Any] = {}
+        self._state: dict[str, object] = {}
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: object | None = None) -> object | None:
         return self._state.get(key, default)
 
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: object) -> None:
         self._state[key] = value

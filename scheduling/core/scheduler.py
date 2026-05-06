@@ -12,36 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import os
+import pathlib
+from typing import Sequence
+
 import yaml
-from typing import Dict, Optional, Sequence
-from ..framework import (
-    LLMRequest,
-    Endpoint,
-    SchedulingResult,
+
+from scheduling.core.config import SchedulerConfig
+from scheduling.framework import (
     CycleState,
+    Endpoint,
+    LLMRequest,
     ProfileRunResult,
+    SchedulerProfile,
+    SchedulingResult,
     ScoredEndpoint,
 )
-from .config import SchedulerConfig
 
 
 class Scheduler:
-    def __init__(self, config_path: Optional[str] = None) -> None:
+    def __init__(self, config_path: str | None = None) -> None:
         if config_path:
             self.config_path = config_path
         else:
             self.config_path = os.environ.get("ROUTER_CONFIG_PATH")
             if not self.config_path:
                 raise ValueError(
-                    "ROUTER_CONFIG_PATH environment variable is missing and no config_path provided. Ensure the ConfigMap is mounted or path is passed."
+                    "ROUTER_CONFIG_PATH environment variable is missing and no "
+                    "config_path provided. Ensure the ConfigMap is mounted or "
+                    "path is passed."
                 )
 
         self.last_mtime = 0
         self._maybe_reload_config()
 
     @classmethod
-    def new_with_config(cls, config: SchedulerConfig) -> "Scheduler":
+    def new_with_config(cls, config: SchedulerConfig) -> Scheduler:
         instance = object.__new__(cls)
         instance.config_path = None
         instance.last_mtime = 0
@@ -49,13 +57,13 @@ class Scheduler:
         instance.profiles = config.profiles
         return instance
 
-    def _maybe_reload_config(self):
+    def _maybe_reload_config(self) -> None:
         if self.config_path is None:
             return
-        mtime = os.path.getmtime(self.config_path)
+        mtime = pathlib.Path(self.config_path).stat().st_mtime
         if mtime > self.last_mtime:
             print(f"Reloading scheduler config from {self.config_path}")
-            with open(self.config_path, "r") as f:
+            with pathlib.Path(self.config_path).open(encoding="utf-8") as f:
                 config_dict = yaml.safe_load(f)
             if not isinstance(config_dict, dict):
                 raise ValueError("Parsed configuration is not a valid dictionary.")
@@ -71,22 +79,26 @@ class Scheduler:
             raise ValueError("no scheduling candidates provided")
 
         cycle_state = CycleState()
-        profile_results: Dict[str, Optional[ProfileRunResult]] = {}
+        profile_results: dict[str, ProfileRunResult | None] = {}
 
         # ask profile handler which profiles to run
         selected = self.profile_handler.pick(
             cycle_state, request, self.profiles, profile_results
         )
-        assert selected is not None
+        assert selected is not None  # noqa: S101
+
+        def run_profile(
+            profile_name: str, profile: SchedulerProfile
+        ) -> ProfileRunResult | None:
+            try:
+                return profile.run(request, cycle_state, candidates)
+            except Exception as e:  # noqa: BLE001
+                print(f"Error running profile {profile_name}: ")
+                print(repr(e))
+                return None
 
         for name, profile in selected.items():
-            try:
-                res = profile.run(request, cycle_state, candidates)
-                profile_results[name] = res
-            except Exception as e:
-                print(f"Error running profile {name}: ")
-                print(repr(e))
-                profile_results[name] = None
+            profile_results[name] = run_profile(name, profile)
 
         primary = self.profile_handler.process_results(
             cycle_state, request, profile_results

@@ -12,15 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Sequence, Callable
+from __future__ import annotations
+
+from typing import Callable, Sequence
+
 from .types import Endpoint
 
 
 def score_by_metric(
     endpoints: Sequence[Endpoint],
     metric_extractor: Callable[[Endpoint], float],
+    *,
     lower_is_better: bool = True,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Helper function to score endpoints relative to each other based on a numeric metric.
 
@@ -40,20 +44,17 @@ def score_by_metric(
 
     for ep in eps:
         val = metric_extractor(ep)
-        if val < min_val:
-            min_val = val
-        if val > max_val:
-            max_val = val
+        min_val = min(min_val, val)
+        max_val = max(max_val, val)
 
-    scores: Dict[str, float] = {}
+    scores: dict[str, float] = {}
     for ep in eps:
         val = metric_extractor(ep)
         if max_val == min_val:
             scores[ep.name] = 1.0
+        elif lower_is_better:
+            scores[ep.name] = (max_val - val) / (max_val - min_val)
         else:
-            if lower_is_better:
-                scores[ep.name] = (max_val - val) / (max_val - min_val)
-            else:
-                scores[ep.name] = (val - min_val) / (max_val - min_val)
+            scores[ep.name] = (val - min_val) / (max_val - min_val)
 
     return scores

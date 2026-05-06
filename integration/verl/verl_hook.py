@@ -12,45 +12,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import asyncio
 import logging
-import ray
 import uuid
-from typing import Dict, List, Any, Optional, Tuple
+
+import ray
 from omegaconf import DictConfig
-
 from verl.experimental.agent_loop.agent_loop import (
-    AsyncLLMServerManager,
-    AgentLoopWorker,
     AgentLoopManager,
+    AgentLoopWorker,
+    AsyncLLMServerManager,
 )
-
-from scheduling.framework import LLMRequest, Endpoint
-from datalayer.verl.metrics import verl_metrics_polling_loop
-from datalayer.verl.datastore import InflightStore
-from scheduling import Scheduler
-
 from verl.workers.rollout.vllm_rollout.vllm_async_server import vLLMHttpServer
+
+from datalayer.verl.datastore import InflightStore
+from datalayer.verl.metrics import verl_metrics_polling_loop
+from scheduling import Scheduler
+from scheduling.framework import Endpoint, LLMRequest
 
 logger = logging.getLogger(__name__)
 
-class vllmEnginePatch:
+
+class VllmEnginePatch:
     """
     Monkey-patching vLLM V1 (0.11.0+) to allow metrics extraction.
+
     This bypasses verl's default behavior of disabling engine stats logging and
     captures SchedulerStats directly from the engine's internal record loop.
 
     Done here since verl_hook is on the GPU worker nodes.
     """
+
     @staticmethod
-    async def _get_routing_stats(self):
+    async def _get_routing_stats(server: object) -> dict[str, object]:
         """
         RPC entry point injected into vLLMHttpServer.
+
         Retrieves real-time engine stats (KV cache, running requests) for the scheduler.
         """
-        stats = {"num_waiting_reqs": 0, "num_running_reqs": 0, "kv": 0.0, "error": None}
+        stats: dict[str, object] = {
+            "num_waiting_reqs": 0,
+            "num_running_reqs": 0,
+            "kv": 0.0,
+            "error": None,
+        }
         try:
-            engine = getattr(self, "engine", None)
+            engine = getattr(server, "engine", None)
             if engine is None:
                 stats["error"] = "No engine attribute on vLLMHttpServer"
                 return stats
@@ -80,57 +89,69 @@ class vllmEnginePatch:
                 return stats
 
             stats["error"] = "Could not identify vLLM engine type (V0 or V1)"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             stats["error"] = f"Exception in get_routing_stats: {e}"
         return stats
 
     @classmethod
-    def apply(cls):
+    def apply(cls) -> None:
         try:
-            from vllm.v1.metrics.loggers import StatLoggerManager
             from vllm.v1.engine.async_llm import AsyncLLM
+            from vllm.v1.metrics.loggers import StatLoggerManager
 
             # Ensure stats logging is always ON.
             original_from_config = AsyncLLM.from_vllm_config
+
             @classmethod
-            def patched_from_config(cls_vllm, *args, **kwargs):
+            def patched_from_config(
+                cls_vllm: object, *args: object, **kwargs: object
+            ) -> object:
                 kwargs["disable_log_stats"] = False
                 return original_from_config(*args, **kwargs)
+
             AsyncLLM.from_vllm_config = patched_from_config
 
             # Capture stats directly on the logger manager instance during record().
             original_record = StatLoggerManager.record
-            def patched_record(self, scheduler_stats, *args, **kwargs):
+
+            def patched_record(
+                self: object,
+                scheduler_stats: object,
+                *args: object,
+                **kwargs: object,
+            ) -> object:
                 if scheduler_stats is not None:
                     self._latest_captured_stats = scheduler_stats
                 return original_record(self, scheduler_stats, *args, **kwargs)
+
             StatLoggerManager.record = patched_record
 
         except (ImportError, AttributeError):
             # vLLM V0 fallback (symbols don't exist, which is expected)
             pass
-        
+
         # Attach the RPC endpoint to the server actor class
         vLLMHttpServer.get_routing_stats = cls._get_routing_stats
 
+
 # Initialize entire patch
-vllmEnginePatch.apply()
+VllmEnginePatch.apply()
 
 
 class InferenceSchedulerServerManager(AsyncLLMServerManager):
     """
-    Subclass of verl's AsyncLLMServerManager that delegates routing
-    to the native py-inference-scheduler engine.
+    Delegate routing to the native py-inference-scheduler engine.
+
     Compatible with verl v0.7.1.
     """
     def __init__(
-        self, 
-        config: DictConfig, 
-        servers: List[Tuple[str, ray.actor.ActorHandle]], 
+        self,
+        config: DictConfig,
+        servers: list[tuple[str, ray.actor.ActorHandle]],
         load_balancer_handle: ray.actor.ActorHandle,
-        *args, 
-        **kwargs
-    ):
+        *args: object,
+        **kwargs: object,
+    ) -> None:
         super().__init__(config, servers, load_balancer_handle, *args, **kwargs)
         # Extract rollout config to support configurable ignore_eos
         if config.get("actor_rollout_ref"):
@@ -149,15 +170,19 @@ class InferenceSchedulerServerManager(AsyncLLMServerManager):
                 name=server_id,
                 attributes={
                     "replica_obj": handle,
-                    "routing_stats": {}
-                }
+                    "routing_stats": {},
+                },
             )
             self.endpoints.append(ep)
 
         self._metrics_task = None
 
-    async def _acquire_server(self, request_id: str, prompt_ids: Optional[List[int]] = None) -> Tuple[str, ray.actor.ActorHandle]:
-        """Overrides Verl's Native Global Load Balancer with py-inference-scheduler logic"""
+    async def _acquire_server(
+        self,
+        request_id: str,
+        prompt_ids: list[int] | None = None,
+    ) -> tuple[str, ray.actor.ActorHandle]:
+        """Overrides Verl's Native Global Load Balancer with py-inference-scheduler logic."""
         if self._metrics_task is None:
             self._metrics_task = asyncio.create_task(
                 verl_metrics_polling_loop(self.endpoints, self.inflight_store)
@@ -173,39 +198,42 @@ class InferenceSchedulerServerManager(AsyncLLMServerManager):
 
         # fall back to verl LB
         if not selected_endpoints:
-            logger.warning("py-inference-scheduler returned no endpoints, falling back to verl global LB.")
+            logger.warning(
+                "py-inference-scheduler returned no endpoints, falling back to verl global LB."
+            )
             self._lb_acquired_requests.add(request_id)
             return await super()._acquire_server(request_id)
 
         winning_endpoint: Endpoint = selected_endpoints[0].endpoint
-        logger.info(f"[{request_id[:6]}] Routed to {winning_endpoint.name}")
-        
+        logger.info("[%s] Routed to %s", request_id[:6], winning_endpoint.name)
+
         return winning_endpoint.name, winning_endpoint.attributes["replica_obj"]
 
-    def _release_server(self, server_id: str, request_id: Optional[str] = None) -> None:
-        """Decrements local inflight tracking and notifies global LB if it originated there"""
+    def _release_server(self, server_id: str, request_id: str | None = None) -> None:
+        """Decrements local inflight tracking and notifies global LB if it originated there."""
         self.inflight_store.decrement(server_id)
         if request_id and request_id in self._lb_acquired_requests:
             super()._release_server(server_id)
             self._lb_acquired_requests.remove(request_id)
 
     async def generate(
-        self, 
-        request_id: str, 
-        *, 
-        prompt_ids: List[int], 
-        sampling_params: Dict[str, Any], 
-        image_data: Optional[List[Any]] = None, 
-        video_data: Optional[List[Any]] = None
-    ):
-        """Overrides Verl's generate to manage lifecycle with scheduler"""
+        self,
+        request_id: str,
+        *,
+        prompt_ids: list[int],
+        sampling_params: dict[str, object],
+        image_data: list[object] | None = None,
+        video_data: list[object] | None = None,
+    ) -> object:
+        """Overrides Verl's generate to manage lifecycle with scheduler."""
         # Yield CPU to check for metrics poller
         await asyncio.sleep(0)
 
         server_id, server = await self._acquire_server(request_id, prompt_ids=prompt_ids)
         self.inflight_store.increment(server_id)
-        
-        # vLLM requires a fresh request_id per generation to prevent KV cache collisions. verl has sticky request_ids for multi-turn rollouts.
+
+        # vLLM needs a fresh request_id per generation to avoid KV cache collisions.
+        # verl has sticky request_ids for multi-turn rollouts.
         vllm_request_id = uuid.uuid4().hex
 
         # vLLMAsyncServer ignores ignore_eos from config, so we must pass it explicitly.
@@ -213,7 +241,7 @@ class InferenceSchedulerServerManager(AsyncLLMServerManager):
         if isinstance(sampling_params, dict):
             sampling_params["ignore_eos"] = ignore_eos
         elif hasattr(sampling_params, "ignore_eos"):
-             setattr(sampling_params, "ignore_eos", ignore_eos)
+            sampling_params.ignore_eos = ignore_eos
 
         try:
             return await server.generate.remote(
@@ -221,7 +249,7 @@ class InferenceSchedulerServerManager(AsyncLLMServerManager):
                 prompt_ids=prompt_ids,
                 sampling_params=sampling_params,
                 image_data=image_data,
-                video_data=video_data
+                video_data=video_data,
             )
         finally:
             self._release_server(server_id, request_id)
@@ -229,17 +257,17 @@ class InferenceSchedulerServerManager(AsyncLLMServerManager):
 
 class PyInferenceAgentLoopWorker(AgentLoopWorker):
     """
-    Overrides the Ray worker actor to inject the custom ServerManager
-    before calling super().__init__
+    Inject the custom ServerManager before calling super().__init__.
+
     Compatible with verl v0.7.1.
     """
     def __init__(
-        self, 
-        config: DictConfig, 
-        servers: List[Tuple[str, ray.actor.ActorHandle]], 
+        self,
+        config: DictConfig,
+        servers: list[tuple[str, ray.actor.ActorHandle]],
         load_balancer_handle: ray.actor.ActorHandle,
-        reward_loop_worker_handles: Optional[List[ray.actor.ActorHandle]] = None
-    ):
+        reward_loop_worker_handles: list[ray.actor.ActorHandle] | None = None,
+    ) -> None:
         # Inject our manager
         self.server_manager = InferenceSchedulerServerManager(config, servers, load_balancer_handle)
         super().__init__(config, servers, load_balancer_handle, reward_loop_worker_handles)
@@ -247,10 +275,11 @@ class PyInferenceAgentLoopWorker(AgentLoopWorker):
 
 class PyInferenceAgentLoopManager(AgentLoopManager):
     """
-    The main hook entrypoint loaded by ray_trainer.py
+    Main hook entrypoint loaded by ray_trainer.py.
+
     Overrides the worker actor class that verl spawns across the cluster.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         self.agent_loop_workers_class = ray.remote(PyInferenceAgentLoopWorker)
         super().__init__(*args, **kwargs)

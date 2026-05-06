@@ -13,13 +13,15 @@
 # limitations under the License.
 
 from __future__ import annotations
+
 import random
-from typing import Optional, Sequence
-from ...framework import (
-    PickerPlugin,
-    ScoredEndpoint,
+from typing import Sequence
+
+from scheduling.framework import (
     CycleState,
     LLMRequest,
+    PickerPlugin,
+    ScoredEndpoint,
     register_picker,
 )
 
@@ -34,11 +36,11 @@ class RandomPicker(PickerPlugin):
         cycle_state: CycleState,
         request: LLMRequest,
         scored_endpoints: Sequence[ScoredEndpoint],
-    ) -> Optional[ScoredEndpoint]:
+    ) -> ScoredEndpoint | None:
         if not scored_endpoints:
             return None
         top = scored_endpoints[: self.max_num]
-        return random.choice(top)
+        return random.choice(top)  # noqa: S311
 
 
 @register_picker("max_score")
@@ -51,7 +53,7 @@ class MaxScorePicker(PickerPlugin):
         cycle_state: CycleState,
         request: LLMRequest,
         scored_endpoints: Sequence[ScoredEndpoint],
-    ) -> Optional[ScoredEndpoint]:
+    ) -> ScoredEndpoint | None:
         if not scored_endpoints:
             return None
         return scored_endpoints[0]
