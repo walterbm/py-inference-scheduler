@@ -179,14 +179,14 @@ class IGWRouter(RequestRouter):
 def build_custom_openai_app(builder_config: dict[str, object]) -> object:
     # Same internal logic as build_openai_app, but we map our deployment_cls
     builder_config = LLMServingArgs.model_validate(builder_config)
-    llm_configs = builder_config.llm_configs
+    llm_configs = builder_config.llm_configs  # type: ignore[attr-defined]
 
     llm_deployments = [
         build_llm_deployment(c, deployment_cls=MetricsAwareLLMServer)
         for c in llm_configs
     ]
 
-    ingress_cls_config = builder_config.ingress_cls_config
+    ingress_cls_config = builder_config.ingress_cls_config  # type: ignore[attr-defined]
     ingress_options = ingress_cls_config.ingress_cls.get_deployment_options(llm_configs)
     ingress_cls = make_fastapi_ingress(ingress_cls_config.ingress_cls)
     return serve.deployment(ingress_cls, **ingress_options).bind(
