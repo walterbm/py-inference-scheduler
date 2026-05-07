@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 from .types import CycleState, Endpoint, LLMRequest, ProfileRunResult, ScoredEndpoint
 
@@ -70,6 +70,7 @@ class SchedulerProfile:
     filters: list[FilterPlugin] = field(default_factory=list)
     scorers: list[WeightedScorer] = field(default_factory=list)
     picker: PickerPlugin | None = None
+    flow_control: dict[str, Any] = field(default_factory=dict)
 
     def with_filters(self, *fs: FilterPlugin) -> SchedulerProfile:
         self.filters.extend(fs)

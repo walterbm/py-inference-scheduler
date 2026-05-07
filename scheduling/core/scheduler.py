@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 import pathlib
-from typing import Sequence
+from typing import Any, Sequence
 
 import yaml
 
@@ -62,6 +62,14 @@ class Scheduler:
         instance.profile_handler = config.profile_handler
         instance.profiles = config.profiles
         return instance
+
+    def get_flow_control_config(self) -> dict[str, Any]:
+        """Returns the flow_control configuration from the primary profile, or an empty dict."""
+        self._maybe_reload_config()
+        if hasattr(self, "profiles") and self.profiles:
+            primary_profile = next(iter(self.profiles.values()))
+            return getattr(primary_profile, "flow_control", {})
+        return {}
 
     def _maybe_reload_config(self) -> None:
         if self.config_path is None:
@@ -112,11 +120,10 @@ class Scheduler:
 
         # Build SchedulingResult
         result = SchedulingResult(
-            profile_results={
-                k: v or ProfileRunResult() for k, v in profile_results.items()
-            },
+            profile_results={k: v or ProfileRunResult() for k, v in profile_results.items()},
             primary_profile_name=primary,
         )
+
         selected_eps = (
             result.profile_results[primary].endpoint_list[:1]
             if primary is not None and primary in result.profile_results
@@ -132,7 +139,6 @@ class Scheduler:
     def run(
         self, request: LLMRequest, candidates: Sequence[Endpoint]
     ) -> Sequence[ScoredEndpoint]:
-        self._maybe_reload_config()
         scheduler_output = self.schedule(request, candidates)
         profile_name = scheduler_output.primary_profile_name
         profile_results = (
