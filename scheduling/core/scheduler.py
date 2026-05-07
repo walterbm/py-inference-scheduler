@@ -25,6 +25,7 @@ from scheduling.framework import (
     CycleState,
     Endpoint,
     LLMRequest,
+    ProfileHandler,
     ProfileRunResult,
     SchedulerProfile,
     SchedulingResult,
@@ -33,6 +34,11 @@ from scheduling.framework import (
 
 
 class Scheduler:
+    config_path: str | None
+    last_mtime: float
+    profile_handler: ProfileHandler
+    profiles: dict[str, SchedulerProfile]
+
     def __init__(self, config_path: str | None = None) -> None:
         if config_path:
             self.config_path = config_path
@@ -45,14 +51,14 @@ class Scheduler:
                     "path is passed."
                 )
 
-        self.last_mtime = 0
+        self.last_mtime = 0.0
         self._maybe_reload_config()
 
     @classmethod
     def new_with_config(cls, config: SchedulerConfig) -> Scheduler:
         instance = object.__new__(cls)
         instance.config_path = None
-        instance.last_mtime = 0
+        instance.last_mtime = 0.0
         instance.profile_handler = config.profile_handler
         instance.profiles = config.profiles
         return instance
@@ -113,14 +119,14 @@ class Scheduler:
         )
         selected_eps = (
             result.profile_results[primary].endpoint_list[:1]
-            if primary in result.profile_results
+            if primary is not None and primary in result.profile_results
             else []
         )
         print(f"Selected endpoint {selected_eps}")
-        if selected_eps:
+        if selected_eps and primary is not None:
             for w in self.profiles[primary].scorers:
                 if hasattr(w.scorer, "pre_request"):
-                    w.scorer.pre_request(cycle_state, request, selected_eps[0].endpoint)
+                    w.scorer.pre_request(cycle_state, request, selected_eps[0].endpoint)  # type: ignore[attr-defined]
         return result
 
     def run(
@@ -129,10 +135,14 @@ class Scheduler:
         self._maybe_reload_config()
         scheduler_output = self.schedule(request, candidates)
         profile_name = scheduler_output.primary_profile_name
-        profile_results = scheduler_output.profile_results.get(profile_name)
+        profile_results = (
+            scheduler_output.profile_results.get(profile_name)
+            if profile_name is not None
+            else None
+        )
 
         print(f"Profile {profile_name} results: {profile_results}")
-        selected_endpoint = profile_results.endpoint_list[:1]
+        selected_endpoint = profile_results.endpoint_list[:1] if profile_results else []
 
         if len(selected_endpoint) > 0:
             return selected_endpoint  # pick top 1
