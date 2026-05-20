@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Mapping, Protocol, Sequence
 
 from .types import CycleState, Endpoint, LLMRequest, ProfileRunResult, ScoredEndpoint
 
@@ -39,6 +39,16 @@ class PickerPlugin(Protocol):
         request: LLMRequest,
         scored_pods: Sequence[ScoredEndpoint],
     ) -> ScoredEndpoint | None: ...
+
+
+class FlowControlPlugin(Protocol):
+    def get_allowed_candidates(
+        self, request: LLMRequest, candidates: Sequence[Endpoint]
+    ) -> Sequence[Endpoint]: ...
+
+    def reserve(self, request: LLMRequest, selected: Endpoint) -> None: ...
+
+    def release(self, request: LLMRequest, endpoint_name: str) -> None: ...
 
 
 class ProfileHandler(Protocol):
@@ -70,7 +80,7 @@ class SchedulerProfile:
     filters: list[FilterPlugin] = field(default_factory=list)
     scorers: list[WeightedScorer] = field(default_factory=list)
     picker: PickerPlugin | None = None
-    flow_control: dict[str, Any] = field(default_factory=dict)
+    flow_controls: list[FlowControlPlugin] = field(default_factory=list)
 
     def with_filters(self, *fs: FilterPlugin) -> SchedulerProfile:
         self.filters.extend(fs)
